@@ -1,0 +1,13 @@
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production.environment]
+  VITE_SUPABASE_URL = "https://your-project.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "your-anon-key"
+  VITE_STRIPE_PUBLISHABLE_KEY = "pk_live_your-key"

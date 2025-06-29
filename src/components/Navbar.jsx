@@ -2,13 +2,17 @@ import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
+import { useRole } from '../contexts/RoleContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiHeart, FiUser, FiLogOut, FiMenu, FiX, FiCamera } = FiIcons;
+const { FiHeart, FiUser, FiLogOut, FiMenu, FiX, FiCamera, FiMessageCircle, FiBookOpen, FiCreditCard, FiBarChart, FiUsers, FiStar, FiShield } = FiIcons;
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const { currentPlan, isTrialActive, getTrialDaysLeft } = useSubscription();
+  const { hasPermission } = useRole();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
@@ -22,11 +26,39 @@ const Navbar = () => {
   const navLinks = user ? [
     { path: '/dashboard', label: 'Dashboard' },
     { path: '/profile-review', label: 'Profile Review' },
+    { path: '/conversation-simulator', label: 'Practice' },
+    { path: '/academy', label: 'Academy' },
+    { path: '/referral', label: 'Referral' },
+    { path: '/billing', label: 'Billing' },
+    // Admin links - only show if user has permissions
+    ...(hasPermission('view_analytics') ? [{ path: '/admin', label: 'Admin' }] : []),
+    ...(hasPermission('manage_users') ? [{ path: '/users', label: 'Users' }] : []),
     { path: '/profile', label: 'Profile' }
   ] : [
+    { path: '/success-stories', label: 'Success Stories' },
     { path: '/login', label: 'Login' },
     { path: '/register', label: 'Sign Up' }
   ];
+
+  const getRoleColor = (role) => {
+    const colors = {
+      admin: 'bg-red-100 text-red-800',
+      manager: 'bg-blue-100 text-blue-800',
+      editor: 'bg-green-100 text-green-800',
+      viewer: 'bg-gray-100 text-gray-800'
+    };
+    return colors[role] || colors.viewer;
+  };
+
+  const getRoleIcon = (role) => {
+    const icons = {
+      admin: FiShield,
+      manager: FiUsers,
+      editor: FiUser,
+      viewer: FiUser
+    };
+    return icons[role] || FiUser;
+  };
 
   return (
     <nav className="bg-white shadow-lg sticky top-0 z-50">
@@ -63,6 +95,30 @@ const Navbar = () => {
 
             {user && (
               <div className="flex items-center space-x-4">
+                {/* Role Badge */}
+                <div className="flex items-center space-x-2">
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center space-x-1 ${getRoleColor(user.role)}`}>
+                    <SafeIcon icon={getRoleIcon(user.role)} className="h-3 w-3" />
+                    <span>{user.role}</span>
+                  </span>
+                </div>
+
+                {/* Subscription Badge */}
+                {currentPlan && (
+                  <div className="flex items-center space-x-2">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      currentPlan.id === 'premium'
+                        ? 'bg-purple-100 text-purple-800'
+                        : currentPlan.id === 'standard'
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {currentPlan.name}
+                      {isTrialActive() && ` (Trial: ${getTrialDaysLeft()}d)`}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex items-center space-x-2">
                   <img
                     src={user.avatar}
@@ -71,6 +127,7 @@ const Navbar = () => {
                   />
                   <span className="text-sm text-gray-700">{user.name}</span>
                 </div>
+
                 <button
                   onClick={handleLogout}
                   className="flex items-center space-x-1 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -119,6 +176,30 @@ const Navbar = () => {
 
               {user && (
                 <div className="pt-2 border-t border-gray-200">
+                  {/* Mobile Role Badge */}
+                  <div className="px-3 py-2">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center space-x-1 w-fit ${getRoleColor(user.role)}`}>
+                      <SafeIcon icon={getRoleIcon(user.role)} className="h-3 w-3" />
+                      <span>{user.role}</span>
+                    </span>
+                  </div>
+
+                  {/* Mobile Subscription Badge */}
+                  {currentPlan && (
+                    <div className="px-3 py-2">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        currentPlan.id === 'premium'
+                          ? 'bg-purple-100 text-purple-800'
+                          : currentPlan.id === 'standard'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {currentPlan.name}
+                        {isTrialActive() && ` (Trial: ${getTrialDaysLeft()}d)`}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center space-x-2 px-3 py-2">
                     <img
                       src={user.avatar}
@@ -127,6 +208,7 @@ const Navbar = () => {
                     />
                     <span className="text-sm text-gray-700">{user.name}</span>
                   </div>
+
                   <button
                     onClick={handleLogout}
                     className="flex items-center space-x-1 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors w-full text-left"

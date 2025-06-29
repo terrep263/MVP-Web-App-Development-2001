@@ -63,128 +63,86 @@ const ROLES = {
 };
 
 export const RoleProvider = ({ children }) => {
-  const { user } = useAuth();
+  const { user, updateUserRole } = useAuth();
   const [users, setUsers] = useState([]);
-  const [currentUserRole, setCurrentUserRole] = useState('editor');
 
   useEffect(() => {
     if (user) {
-      // Load users and roles from localStorage
-      const savedUsers = localStorage.getItem('taskflow_users');
-      const savedUserRoles = localStorage.getItem('taskflow_user_roles');
+      // Load existing users from localStorage
+      const savedUsers = localStorage.getItem('app_users');
       
       if (savedUsers) {
-        setUsers(JSON.parse(savedUsers));
+        const parsedUsers = JSON.parse(savedUsers);
+        // Update current user in the users list
+        const updatedUsers = parsedUsers.map(u => 
+          u.email === user.email ? { ...user, id: u.id || user.id } : u
+        );
+        
+        // Add current user if not exists
+        if (!parsedUsers.find(u => u.email === user.email)) {
+          updatedUsers.push(user);
+        }
+        
+        setUsers(updatedUsers);
+        localStorage.setItem('app_users', JSON.stringify(updatedUsers));
       } else {
-        // Initialize with current user and some sample users
-        const initialUsers = [
-          {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            avatar: user.avatar,
-            role: 'admin',
-            status: 'active',
-            lastActive: new Date().toISOString(),
-            joinedAt: new Date().toISOString()
-          },
-          {
-            id: 2,
-            name: 'Sarah Johnson',
-            email: 'sarah@example.com',
-            avatar: 'https://ui-avatars.com/api/?name=Sarah+Johnson&background=10b981&color=fff',
-            role: 'manager',
-            status: 'active',
-            lastActive: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-            joinedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString()
-          },
-          {
-            id: 3,
-            name: 'Mike Chen',
-            email: 'mike@example.com',
-            avatar: 'https://ui-avatars.com/api/?name=Mike+Chen&background=f59e0b&color=fff',
-            role: 'editor',
-            status: 'active',
-            lastActive: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-            joinedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 15).toISOString()
-          },
-          {
-            id: 4,
-            name: 'Emma Davis',
-            email: 'emma@example.com',
-            avatar: 'https://ui-avatars.com/api/?name=Emma+Davis&background=8b5cf6&color=fff',
-            role: 'viewer',
-            status: 'inactive',
-            lastActive: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-            joinedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 60).toISOString()
-          }
-        ];
+        // Initialize with current user
+        const initialUsers = [user];
         setUsers(initialUsers);
-        localStorage.setItem('taskflow_users', JSON.stringify(initialUsers));
-      }
-
-      if (savedUserRoles) {
-        const userRoles = JSON.parse(savedUserRoles);
-        setCurrentUserRole(userRoles[user.id] || 'editor');
-      } else {
-        // Set current user as admin by default
-        const userRoles = { [user.id]: 'admin' };
-        localStorage.setItem('taskflow_user_roles', JSON.stringify(userRoles));
-        setCurrentUserRole('admin');
+        localStorage.setItem('app_users', JSON.stringify(initialUsers));
       }
     }
   }, [user]);
 
   const hasPermission = (permission) => {
-    const role = ROLES[currentUserRole];
-    return role && role.permissions.includes(permission);
+    return user?.permissions?.includes(permission) || false;
   };
 
   const hasRole = (roleName) => {
-    return currentUserRole === roleName;
+    return user?.role === roleName;
   };
 
   const hasMinimumRole = (roleName) => {
-    const userLevel = ROLES[currentUserRole]?.level || 0;
+    const userLevel = ROLES[user?.role]?.level || 0;
     const requiredLevel = ROLES[roleName]?.level || 0;
     return userLevel >= requiredLevel;
   };
 
-  const updateUserRole = (userId, newRole) => {
+  const updateUserRoleById = async (userId, newRole) => {
     if (!hasPermission('manage_roles')) {
       throw new Error('Insufficient permissions to manage roles');
     }
 
+    // Update in users list
     const updatedUsers = users.map(u => 
-      u.id === userId ? { ...u, role: newRole } : u
+      u.id === userId ? { ...u, role: newRole, permissions: ROLES[newRole]?.permissions || [] } : u
     );
     setUsers(updatedUsers);
-    localStorage.setItem('taskflow_users', JSON.stringify(updatedUsers));
+    localStorage.setItem('app_users', JSON.stringify(updatedUsers));
 
-    // Update role mapping
-    const userRoles = JSON.parse(localStorage.getItem('taskflow_user_roles') || '{}');
-    userRoles[userId] = newRole;
-    localStorage.setItem('taskflow_user_roles', JSON.stringify(userRoles));
-
-    // Update current user role if it's the current user
+    // If updating current user, update auth context
     if (userId === user?.id) {
-      setCurrentUserRole(newRole);
+      updateUserRole(newRole);
     }
+
+    return Promise.resolve();
   };
 
-  const updateUserStatus = (userId, status) => {
+  const updateUserStatus = async (userId, status) => {
     if (!hasPermission('manage_users')) {
       throw new Error('Insufficient permissions to manage users');
     }
 
     const updatedUsers = users.map(u => 
-      u.id === userId ? { ...u, status } : u
+      u.id === userId ? { ...u, status, lastActive: new Date().toISOString() } : u
     );
     setUsers(updatedUsers);
-    localStorage.setItem('taskflow_users', JSON.stringify(updatedUsers));
+    localStorage.setItem('app_users', JSON.stringify(updatedUsers));
+
+    return Promise.resolve();
   };
 
-  const addUser = (userData) => {
+  const addUser = async (userData) => {
     if (!hasPermission('manage_users')) {
       throw new Error('Insufficient permissions to manage users');
     }
@@ -195,22 +153,18 @@ export const RoleProvider = ({ children }) => {
       status: 'active',
       joinedAt: new Date().toISOString(),
       lastActive: new Date().toISOString(),
-      avatar: `https://ui-avatars.com/api/?name=${userData.name}&background=3b82f6&color=fff`
+      avatar: `https://ui-avatars.com/api/?name=${userData.name}&background=3b82f6&color=fff`,
+      permissions: ROLES[userData.role]?.permissions || []
     };
 
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
-    localStorage.setItem('taskflow_users', JSON.stringify(updatedUsers));
+    localStorage.setItem('app_users', JSON.stringify(updatedUsers));
 
-    // Update role mapping
-    const userRoles = JSON.parse(localStorage.getItem('taskflow_user_roles') || '{}');
-    userRoles[newUser.id] = userData.role;
-    localStorage.setItem('taskflow_user_roles', JSON.stringify(userRoles));
-
-    return newUser;
+    return Promise.resolve(newUser);
   };
 
-  const removeUser = (userId) => {
+  const removeUser = async (userId) => {
     if (!hasPermission('manage_users')) {
       throw new Error('Insufficient permissions to manage users');
     }
@@ -221,12 +175,9 @@ export const RoleProvider = ({ children }) => {
 
     const updatedUsers = users.filter(u => u.id !== userId);
     setUsers(updatedUsers);
-    localStorage.setItem('taskflow_users', JSON.stringify(updatedUsers));
+    localStorage.setItem('app_users', JSON.stringify(updatedUsers));
 
-    // Remove from role mapping
-    const userRoles = JSON.parse(localStorage.getItem('taskflow_user_roles') || '{}');
-    delete userRoles[userId];
-    localStorage.setItem('taskflow_user_roles', JSON.stringify(userRoles));
+    return Promise.resolve();
   };
 
   const getUserRole = (userId) => {
@@ -247,12 +198,12 @@ export const RoleProvider = ({ children }) => {
 
   const value = {
     users,
-    currentUserRole,
+    currentUserRole: user?.role || 'viewer',
     roles: ROLES,
     hasPermission,
     hasRole,
     hasMinimumRole,
-    updateUserRole,
+    updateUserRole: updateUserRoleById,
     updateUserStatus,
     addUser,
     removeUser,
